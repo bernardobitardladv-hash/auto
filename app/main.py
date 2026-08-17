@@ -18,10 +18,7 @@ app = FastAPI(title="Automação CRM DL", version="0.1.0")
 
 def configured() -> bool:
     """Indica se as credenciais mínimas foram configuradas no ambiente."""
-    return all(
-        os.getenv(key)
-        for key in ("BITRIX_CLIENT_ID", "BITRIX_CLIENT_SECRET", "BITRIX_APP_TOKEN")
-    )
+    return all(os.getenv(key) for key in ("BITRIX_CLIENT_ID", "BITRIX_CLIENT_SECRET"))
 
 
 def enabled() -> bool:
