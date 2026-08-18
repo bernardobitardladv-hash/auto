@@ -51,5 +51,5 @@ SDR_RETORNO = (
 CADENCES = {"BDR_CONTATO": BDR_CONTACT, "BDR_RECUPERAR": BDR_RECUPERAR, "SDR_TENTATIVA": SDR_TENTATIVA, "SDR_RETORNO": SDR_RETORNO}
 
 # Ao esgotar a sequência sem contato, o negócio segue para Recuperar / F-Up.
-EXHAUSTION_STAGE = {"BDR_CONTATO": {"category_id": 23, "stage_id": "C23:PREPARATION"}, "BDR_RECUPERAR": {"category_id": 23, "stage_id": "C23:PREPARATION"}, "SDR_TENTATIVA": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}, "SDR_RETORNO": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}}
+EXHAUSTION_STAGE = {"BDR_CONTATO": {"category_id": 23, "stage_id": "C23:PREPARATION"}, "BDR_RECUPERAR": {"category_id": 23, "stage_id": "C23:APOLOGY"}, "SDR_TENTATIVA": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}, "SDR_RETORNO": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}}
 
