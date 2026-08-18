@@ -39,9 +39,8 @@ class Workflow:
         state = await self.db.state_by_task(task_id)
         if not state: return "task-untracked"
         if str(task.get("status") or "") not in ("5", "completed"): return "task-open"
-        async with self.db.lock_deal(int(state["deal_id"])):
-            await self.db.save_state(state["deal_id"], category_id=state["category_id"], stage_id=state["stage_id"], cadence=state["cadence"], position=int(state["position"])+1, started_at=state["started_at"], anchor_at=state["anchor_at"], open_task_id=None, next_due=None, active=True)
-            return await self.deal_changed(int(state["deal_id"]), "task-complete", dedupe=False)
+        await self.db.save_state(state["deal_id"], category_id=state["category_id"], stage_id=state["stage_id"], cadence=state["cadence"], position=int(state["position"])+1, started_at=state["started_at"], anchor_at=state["anchor_at"], open_task_id=None, next_due=None, active=True)
+        return await self.deal_changed(int(state["deal_id"]), "task-complete", dedupe=False)
 
     async def deal_changed(self, deal_id, event="ONCRMDEALUPDATE", dedupe=True):
         client = BitrixClient(self.db); deal = await client.deal(deal_id)
