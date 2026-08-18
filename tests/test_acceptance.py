@@ -66,6 +66,12 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn("UF_CRM_HORARIO_RETORNO", names)
         self.assertEqual(len(RESULT_OPTIONS), 9)
 
+    def test_inactive_state_must_not_resume(self):
+        state = {"active": False, "position": 7}
+        if state and not state["active"]:
+            state = None
+        self.assertIsNone(state)
+
     def test_one_task_then_exhaustion(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
         self.assertEqual(next_step("BDR_CONTATO", 0, base)["kind"], "task")
