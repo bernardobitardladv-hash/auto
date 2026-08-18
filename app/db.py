@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from datetime import datetime
+from contextlib import asynccontextmanager
 import asyncpg
 
 SCHEMA = """
@@ -27,9 +28,21 @@ class Database:
     async def oauth(self):
         if not self.pool: return None
         async with self.pool.acquire() as c: return await c.fetchrow("SELECT * FROM oauth_installation WHERE installation_key='bitrix'")
-    async def mark_event(self, key):
+    async def mark_event(self, key, window_seconds=300):
         if not self.pool: return True
-        async with self.pool.acquire() as c: return bool(await c.fetchval("INSERT INTO processed_event(event_key) VALUES($1) ON CONFLICT DO NOTHING RETURNING event_key", key))
+        async with self.pool.acquire() as c:
+            await c.execute("DELETE FROM processed_event WHERE received_at < NOW() - ($1::text || ' seconds')::interval", str(window_seconds))
+            return bool(await c.fetchval("INSERT INTO processed_event(event_key) VALUES($1) ON CONFLICT DO NOTHING RETURNING event_key", key))
+    @asynccontextmanager
+    async def lock_deal(self, deal_id):
+        """Serializa alterações de um negócio para manter uma única tarefa."""
+        if not self.pool:
+            yield
+            return
+        async with self.pool.acquire() as c:
+            async with c.transaction():
+                await c.execute("SELECT pg_advisory_xact_lock($1)", int(deal_id))
+                yield
     async def state(self, deal_id):
         if not self.pool: return None
         async with self.pool.acquire() as c: return await c.fetchrow("SELECT * FROM deal_state WHERE deal_id=$1", deal_id)
@@ -44,4 +57,7 @@ class Database:
                 values[key] = datetime.fromisoformat(values[key])
         async with self.pool.acquire() as c:
             await c.execute("INSERT INTO deal_state(deal_id,"+','.join(keys)+") VALUES($1,"+','.join(f'${i}' for i in range(2,len(keys)+2))+") ON CONFLICT(deal_id) DO UPDATE SET "+','.join(f'{k}=EXCLUDED.{k}' for k in keys)+",updated_at=NOW()", deal_id, *[values.get(k) for k in keys])
-
+    async def deactivate_state(self, deal_id):
+        if not self.pool: return
+        async with self.pool.acquire() as c:
+            await c.execute("UPDATE deal_state SET active=FALSE, open_task_id=NULL, next_due=NULL, updated_at=NOW() WHERE deal_id=$1", deal_id)
