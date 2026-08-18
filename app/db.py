@@ -61,4 +61,8 @@ class Database:
         if not self.pool: return
         async with self.pool.acquire() as c:
             await c.execute("UPDATE deal_state SET active=FALSE, open_task_id=NULL, next_due=NULL, updated_at=NOW() WHERE deal_id=$1", deal_id)
+    async def record_error(self, deal_id, message):
+        if not self.pool: return
+        async with self.pool.acquire() as c:
+            await c.execute("INSERT INTO deal_state(deal_id,last_error,active) VALUES($1,$2,FALSE) ON CONFLICT(deal_id) DO UPDATE SET last_error=EXCLUDED.last_error,updated_at=NOW()", deal_id, str(message)[:1000])
 
