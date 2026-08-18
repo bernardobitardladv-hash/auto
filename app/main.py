@@ -59,6 +59,11 @@ def health() -> dict[str, Any]:
         "time": datetime.now(timezone.utc).isoformat(),
     }
 
+@app.get("/diagnostics")
+async def diagnostics() -> dict[str, bool]:
+    """Diagnóstico sem expor segredos: usado somente na validação do piloto."""
+    return {"database_ready": bool(app.state.db.pool), "oauth_ready": bool(await app.state.db.oauth())}
+
 
 @app.post("/bitrix/install")
 async def install(request: Request) -> dict[str, str]:
