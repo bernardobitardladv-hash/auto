@@ -3,7 +3,7 @@ import unittest
 
 from app.cadences import CADENCES
 from app.engine import next_step
-from app.workflow import RESULT_ROUTES
+from app.workflow import RESULT_ROUTES, _task_fields
 
 
 class AcceptanceTests(unittest.TestCase):
@@ -41,6 +41,10 @@ class AcceptanceTests(unittest.TestCase):
     def test_default_funnel_stage_has_no_c0_prefix(self):
         exhausted = next_step("SDR_TENTATIVA", 9, "2026-08-17T09:00:00+00:00")
         self.assertEqual(exhausted["destination"]["stage_id"], "UC_XXPI8O")
+
+    def test_task_is_bound_to_deal(self):
+        fields = _task_fields(2221, TITLE="Teste")
+        self.assertEqual(fields["UF_CRM_TASK"], ["D_2221"])
 
     def test_one_task_then_exhaustion(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
