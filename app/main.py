@@ -118,6 +118,42 @@ async def bootstrap_fields(request: Request) -> dict[str, dict[str, str]]:
     return await ensure_operational_fields(BitrixClient(app.state.db))
 
 
+def _require_pilot_control(request: Request) -> str:
+    expected = os.getenv("PILOT_CONTROL_TOKEN", "")
+    received = request.headers.get("x-pilot-control", "")
+    deal_id = os.getenv("PILOT_DEAL_ID", "").strip()
+    if not expected or not hmac.compare_digest(expected, received):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="controle do piloto inválido")
+    if not deal_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="negócio piloto ausente")
+    return deal_id
+
+
+@app.get("/pilot/snapshot")
+async def pilot_snapshot(request: Request) -> dict[str, Any]:
+    """Diagnóstico temporário restrito ao único negócio piloto."""
+    deal_id = _require_pilot_control(request)
+    client = BitrixClient(app.state.db)
+    deal = await client.deal(int(deal_id))
+    state_row = await app.state.db.state(int(deal_id))
+    state = dict(state_row) if state_row else None
+    task = None
+    if state and state.get("open_task_id"):
+        task = await client.task(int(state["open_task_id"]))
+    return {
+        "deal": {
+            key: deal.get(key)
+            for key in (
+                "id", "title", "categoryId", "stageId", "assignedById",
+                "ufCrmResultadoTentativa", "ufCrmHorarioRetorno",
+                "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao",
+            )
+        },
+        "state": state,
+        "task": task,
+    }
+
+
 @app.post("/bitrix/install")
 async def install(request: Request) -> dict[str, str]:
     """Recebe e armazena o retorno OAuth da instalação do Bitrix."""
