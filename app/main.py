@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from .db import Database
+from .bitrix import BitrixClient
 from .workflow import Workflow
 
 app = FastAPI(title="Automação CRM DL", version="0.1.0")
@@ -77,6 +78,19 @@ async def diagnostics() -> dict[str, bool]:
         "database_ready": bool(app.state.db.pool),
         "oauth_ready": bool(await app.state.db.oauth()),
         "webhook_ready": bool(os.getenv("BITRIX_WEBHOOK_URL", "").strip()),
+    }
+
+
+@app.get("/diagnostics/crm-fields")
+async def diagnostic_crm_fields() -> dict[str, dict[str, str | None]]:
+    """Expõe apenas metadados dos campos operacionais, nunca valores de clientes."""
+    raw = await BitrixClient(app.state.db).call("crm.item.fields", {"entityTypeId": 2})
+    fields = raw.get("fields", raw) if isinstance(raw, dict) else {}
+    keywords = ("resultado", "retorno", "handoff", "piloto", "sdr resp")
+    return {
+        name: {"title": meta.get("title"), "type": meta.get("type")}
+        for name, meta in fields.items()
+        if isinstance(meta, dict) and (name in {"ufCrm_1782774357152", "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao"} or any(word in str(meta.get("title", "")).lower() for word in keywords))
     }
 
 
