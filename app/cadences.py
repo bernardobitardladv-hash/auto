@@ -18,6 +18,7 @@ class Touch:
     label: str = ""
     offset_hours: int = 0
     conditional_result: str | None = None
+    anchored: bool = False
 
 
 BDR_CONTACT = (
@@ -43,13 +44,13 @@ SDR_TENTATIVA = tuple(Touch(day, None, channel=channel, label=label) for day, ch
     (11, "whatsapp", "SDR — tentativa 9 — encerramento")))
 SDR_RETORNO = (
     Touch(0, None, channel="whatsapp", label="SDR retorno — confirmação"),
-    Touch(0, None, channel="ligacao", label="SDR retorno — ligação agendada"),
-    Touch(0, None, channel="whatsapp", label="SDR retorno — reforço", offset_hours=1, conditional_result="45"),
-    Touch(1, None, channel="ligacao", label="SDR retorno — D+1"),
-    Touch(2, None, channel="whatsapp", label="SDR retorno — D+2"),
-    Touch(3, None, channel="whatsapp", label="SDR retorno — final"))
+    Touch(0, None, channel="ligacao", label="SDR retorno — ligação agendada", anchored=True),
+    Touch(0, None, channel="whatsapp", label="SDR retorno — reforço", offset_hours=1, conditional_result="45", anchored=True),
+    Touch(1, None, channel="ligacao", label="SDR retorno — D+1", anchored=True),
+    Touch(2, None, channel="whatsapp", label="SDR retorno — D+2", anchored=True),
+    Touch(3, None, channel="whatsapp", label="SDR retorno — final", anchored=True))
 CADENCES = {"BDR_CONTATO": BDR_CONTACT, "BDR_RECUPERAR": BDR_RECUPERAR, "SDR_TENTATIVA": SDR_TENTATIVA, "SDR_RETORNO": SDR_RETORNO}
 
 # Ao esgotar a sequência sem contato, o negócio segue para Recuperar / F-Up.
-EXHAUSTION_STAGE = {"BDR_CONTATO": {"category_id": 23, "stage_id": "C23:PREPARATION"}, "BDR_RECUPERAR": {"category_id": 23, "stage_id": "C23:APOLOGY"}, "SDR_TENTATIVA": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}, "SDR_RETORNO": {"category_id": 0, "stage_id": "C0:UC_XXPI8O"}}
+EXHAUSTION_STAGE = {"BDR_CONTATO": {"category_id": 23, "stage_id": "C23:PREPARATION"}, "BDR_RECUPERAR": {"category_id": 23, "stage_id": "C23:APOLOGY"}, "SDR_TENTATIVA": {"category_id": 0, "stage_id": "UC_XXPI8O"}, "SDR_RETORNO": {"category_id": 0, "stage_id": "UC_XXPI8O"}}
 
