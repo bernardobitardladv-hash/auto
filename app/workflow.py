@@ -9,6 +9,7 @@ from .engine import next_step
 
 STAGES = {(0, "PREPARATION"): "SDR_TENTATIVA", (0, "UC_OIFN4M"): "SDR_RETORNO", (23, "NEW"): "BDR_CONTATO", (23, "PREPARATION"): "BDR_RECUPERAR"}
 RESULT_FIELD = "ufCrm_1782774357152"
+RESULT_FIELDS = (RESULT_FIELD, "ufCrmResultadoTentativa")
 RESULT_ROUTES = {
     (0, "PREPARATION"): {"81": "UC_OIFN4M", "51": "UC_58ABGO", "47": "LOSE", "57": "APOLOGY"},
     (0, "UC_OIFN4M"): {"51": "UC_58ABGO", "47": "LOSE", "55": "UC_QK2GWQ"},
@@ -26,7 +27,10 @@ def _version(deal):
 
 
 def _result(deal):
-    value = deal.get(RESULT_FIELD) or deal.get(RESULT_FIELD.upper())
+    value = None
+    for field in RESULT_FIELDS:
+        value = deal.get(field) or deal.get(field.upper())
+        if value is not None: break
     if isinstance(value, list): value = value[0] if value else None
     return str(value) if value is not None else ""
 
@@ -106,7 +110,7 @@ class Workflow:
         if str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") != "Y" and pilot_id != str(deal_id): return "outside-pilot"
         async with self.db.lock_deal(deal_id):
             category, stage = _stage(deal); cadence = STAGES.get((category, stage)); state = await self.db.state(deal_id)
-            result = _result(deal)
+            result = await client.result_code(_result(deal))
             destination = RESULT_ROUTES.get((category, stage), {}).get(result)
             if destination:
                 await client.update_deal(deal_id, {"stageId": destination})
