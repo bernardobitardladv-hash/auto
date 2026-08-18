@@ -8,6 +8,9 @@ from .bitrix import BitrixClient
 from .engine import next_step
 
 STAGES = {(0, "PREPARATION"): "SDR_TENTATIVA", (0, "UC_OIFN4M"): "SDR_RETORNO", (23, "NEW"): "BDR_CONTATO", (23, "PREPARATION"): "BDR_RECUPERAR"}
+RESULT_FIELD = "ufCrm_1782774357152"
+SDR_RESULTS = {"81": "UC_OIFN4M", "51": "UC_58ABGO", "47": "LOSE", "57": "APOLOGY", "55": "UC_QK2GWQ"}
+BDR_RESULTS = {"49": "C23:EXECUTING", "51": "C23:PREPARATION", "47": "C23:LOSE"}
 
 
 def _stage(deal):
@@ -16,6 +19,12 @@ def _stage(deal):
 
 def _version(deal):
     return deal.get("updatedTime") or deal.get("dateModify") or json.dumps({"stage": deal.get("stageId"), "category": deal.get("categoryId")}, sort_keys=True)
+
+
+def _result(deal):
+    value = deal.get(RESULT_FIELD) or deal.get(RESULT_FIELD.upper())
+    if isinstance(value, list): value = value[0] if value else None
+    return str(value) if value is not None else ""
 
 
 class Workflow:
@@ -49,6 +58,23 @@ class Workflow:
         if str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") != "Y" and pilot_id != str(deal_id): return "outside-pilot"
         async with self.db.lock_deal(deal_id):
             category, stage = _stage(deal); cadence = STAGES.get((category, stage)); state = await self.db.state(deal_id)
+            result = _result(deal)
+            destination = (SDR_RESULTS.get(result) if category == 0 and stage in ("PREPARATION", "UC_OIFN4M") else BDR_RESULTS.get(result) if category == 23 and stage in ("NEW", "PREPARATION") else None)
+            if destination:
+                await client.update_deal(deal_id, {"stageId": destination})
+                if state and state["open_task_id"]:
+                    try: await client.complete_task(int(state["open_task_id"]))
+                    except Exception: pass
+                await self.db.deactivate_state(deal_id)
+                return "moved-by-result"
+            if category == 0 and stage == "UC_58ABGO":
+                if not state or state["cadence"] != "SDR_HANDOFF" or not state["open_task_id"]:
+                    if not deal.get("assignedById"): raise ValueError("negócio sem responsável")
+                    handoff = await client.add_task({"TITLE": f"DL | Resumo / Handoff | negócio {deal_id}", "DESCRIPTION": "Preencher Handoff: temperatura, perfil, detalhes, dores, impedimentos e objeções. Depois, marcar ganho manual.", "RESPONSIBLE_ID": deal["assignedById"], "DEADLINE": datetime.now(timezone.utc).replace(hour=20, minute=0, second=0, microsecond=0).isoformat()})
+                    handoff_id = int((handoff.get("task") or {}).get("id"))
+                    await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence="SDR_HANDOFF", position=0, started_at=datetime.now(timezone.utc), anchor_at=None, open_task_id=handoff_id, next_due=None, active=True)
+                    return "handoff-created"
+                return "waiting-handoff"
             if not cadence:
                 if state and state["active"]:
                     if state["open_task_id"]:
@@ -70,9 +96,12 @@ class Workflow:
                 await client.update_deal(deal_id, {"categoryId": destination["category_id"], "stageId": destination["stage_id"]})
                 await self.db.deactivate_state(deal_id)
                 return "moved"
-            if not deal.get("assignedById"): raise ValueError("negócio sem responsável")
+            responsible = deal.get("assignedById")
+            if cadence == "BDR_RECUPERAR" and position == 1:
+                responsible = deal.get("ufCrmSdrResp") or responsible
+            if not responsible: raise ValueError("negócio sem responsável")
             touch = step["task"]
-            result = await client.add_task({"TITLE": f"DL | {touch['label']} | negócio {deal_id}", "DESCRIPTION": f"Executar {touch['channel']} e registrar o resultado no negócio.", "RESPONSIBLE_ID": deal["assignedById"], "DEADLINE": step["due_at"]})
+            result = await client.add_task({"TITLE": f"DL | {touch['label']} | negócio {deal_id}", "DESCRIPTION": f"Executar {touch['channel']} e registrar o resultado no negócio.", "RESPONSIBLE_ID": responsible, "DEADLINE": step["due_at"]})
             raw_task_id = (result.get("task") or {}).get("id") if isinstance(result, dict) else None
             if raw_task_id is None: raise RuntimeError("Bitrix não retornou o ID da tarefa")
             await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence=cadence, position=step["position"], started_at=started, anchor_at=deal.get("ufCrmHorarioRetorno"), open_task_id=int(raw_task_id), next_due=step["due_at"], active=True)
