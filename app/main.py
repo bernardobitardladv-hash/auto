@@ -87,11 +87,19 @@ async def diagnostic_crm_fields() -> dict[str, dict[str, str | None]]:
     raw = await BitrixClient(app.state.db).call("crm.item.fields", {"entityTypeId": 2})
     fields = raw.get("fields", raw) if isinstance(raw, dict) else {}
     keywords = ("resultado", "retorno", "handoff", "piloto", "sdr resp")
-    return {
+    modern = {
         name: {"title": meta.get("title"), "type": meta.get("type")}
         for name, meta in fields.items()
         if isinstance(meta, dict) and (name in {"ufCrm_1782774357152", "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao"} or any(word in str(meta.get("title", "")).lower() for word in keywords))
     }
+    legacy_raw = await BitrixClient(app.state.db).call("crm.deal.userfield.list", {"order": {"ID": "ASC"}})
+    legacy = legacy_raw if isinstance(legacy_raw, list) else legacy_raw.get("items", []) if isinstance(legacy_raw, dict) else []
+    for meta in legacy:
+        name = str(meta.get("FIELD_NAME") or meta.get("fieldName") or "")
+        title = str(meta.get("EDIT_FORM_LABEL") or meta.get("LIST_COLUMN_LABEL") or meta.get("editFormLabel") or "")
+        if name in {"UF_CRM_1782774357152", "UF_CRM_HORARIO_RETORNO", "UF_CRM_SDR_RESP", "UF_CRM_HANDOFF", "UF_CRM_PILOTO_AUTOMACAO"} or any(word in title.lower() for word in keywords):
+            modern[name] = {"title": title, "type": str(meta.get("USER_TYPE_ID") or meta.get("userTypeId") or "")}
+    return modern
 
 
 @app.post("/bitrix/install")
