@@ -154,6 +154,30 @@ async def pilot_snapshot(request: Request) -> dict[str, Any]:
     }
 
 
+@app.post("/pilot/action")
+async def pilot_action(request: Request) -> dict[str, Any]:
+    """Ações temporárias, estritamente limitadas ao card piloto."""
+    deal_id = int(_require_pilot_control(request))
+    body = await request.json()
+    client = BitrixClient(app.state.db)
+    if body.get("complete_open_task") is True:
+        state_row = await app.state.db.state(deal_id)
+        if not state_row or not state_row["open_task_id"]:
+            return {"status": "no-open-task"}
+        await client.complete_task(int(state_row["open_task_id"]))
+        return {"status": "task-completed", "task_id": int(state_row["open_task_id"])}
+    requested = body.get("fields") or {}
+    allowed = {
+        "title", "categoryId", "stageId", "ufCrmResultadoTentativa",
+        "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff",
+        "ufCrmPilotoAutomacao",
+    }
+    if not requested or set(requested) - allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="campos do piloto inválidos")
+    await client.update_deal(deal_id, requested)
+    return {"status": "deal-updated"}
+
+
 @app.post("/bitrix/install")
 async def install(request: Request) -> dict[str, str]:
     """Recebe e armazena o retorno OAuth da instalação do Bitrix."""
