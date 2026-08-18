@@ -44,7 +44,7 @@ class Workflow:
         step = next_step(cadence, position, started, deal.get("ufCrmHorarioRetorno"))
         if step["kind"] == "exhausted":
             dest = step["destination"]; await client.update_deal(deal_id, {"categoryId": dest["category_id"], "stageId": dest["stage_id"]}); return "moved"
-        touch = step["task"]; result = await client.add_task({"TITLE": f"DL | {touch['label']} | negócio {deal_id}", "DESCRIPTION": f"Executar {touch['channel']} e registrar o resultado no negócio.", "RESPONSIBLE_ID": deal.get("assignedById"), "DEADLINE": step["due_at"], "UF_CRM_TASK": [f"D_{deal_id}"]})
+        touch = step["task"]; result = await client.add_task({"TITLE": f"DL | {touch['label']} | negócio {deal_id}", "DESCRIPTION": f"Executar {touch['channel']} e registrar o resultado no negócio.", "RESPONSIBLE_ID": deal.get("assignedById"), "DEADLINE": step["due_at"]})
         task_id = (result.get("task") or {}).get("id") if isinstance(result, dict) else None
         await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence=cadence, position=step["position"], started_at=started, anchor_at=deal.get("ufCrmHorarioRetorno"), open_task_id=task_id, next_due=step["due_at"], active=True)
         return "task-created"
