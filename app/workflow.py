@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+import os
 from .engine import next_step
 from .bitrix import BitrixClient
 
@@ -29,7 +30,9 @@ class Workflow:
         return await self.deal_changed(int(state["deal_id"]))
     async def deal_changed(self, deal_id):
         client = BitrixClient(self.db); deal = await client.deal(deal_id)
-        if str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") != "Y": return "outside-pilot"
+        pilot_id = os.getenv("PILOT_DEAL_ID", "").strip()
+        is_pilot = str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") == "Y" or pilot_id == str(deal_id)
+        if not is_pilot: return "outside-pilot"
         category, stage = _stage(deal); cadence = STAGES.get((category, stage)); state = await self.db.state(deal_id)
         if not cadence: return "no-cadence"
         if state and state["open_task_id"] and state["cadence"] == cadence: return "waiting-task"
