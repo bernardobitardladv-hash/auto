@@ -9,15 +9,12 @@ from __future__ import annotations
 
 import os
 import asyncio
-import hmac
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from .db import Database
-from .bitrix import BitrixClient
 from .workflow import Workflow
-from .schema import ensure_operational_fields
 
 app = FastAPI(title="Automação CRM DL", version="0.1.0")
 
@@ -81,101 +78,6 @@ async def diagnostics() -> dict[str, bool]:
         "oauth_ready": bool(await app.state.db.oauth()),
         "webhook_ready": bool(os.getenv("BITRIX_WEBHOOK_URL", "").strip()),
     }
-
-
-@app.get("/diagnostics/crm-fields")
-async def diagnostic_crm_fields() -> dict[str, dict[str, str | None]]:
-    """Expõe apenas metadados dos campos operacionais, nunca valores de clientes."""
-    raw = await BitrixClient(app.state.db).call("crm.item.fields", {"entityTypeId": 2})
-    fields = raw.get("fields", raw) if isinstance(raw, dict) else {}
-    keywords = ("resultado", "retorno", "handoff", "piloto", "sdr resp")
-    modern = {
-        name: {"title": meta.get("title"), "type": meta.get("type")}
-        for name, meta in fields.items()
-        if isinstance(meta, dict) and (name in {"ufCrm_1782774357152", "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao"} or any(word in str(meta.get("title", "")).lower() for word in keywords))
-    }
-    client = BitrixClient(app.state.db)
-    target_names = ("UF_CRM_1782774357152", "UF_CRM_HORARIO_RETORNO", "UF_CRM_SDR_RESP", "UF_CRM_HANDOFF", "UF_CRM_PILOTO_AUTOMACAO")
-    legacy = []
-    for target_name in target_names:
-        legacy_raw = await client.call("crm.deal.userfield.list", {"filter": {"FIELD_NAME": target_name}})
-        legacy.extend(legacy_raw if isinstance(legacy_raw, list) else legacy_raw.get("items", []) if isinstance(legacy_raw, dict) else [])
-        await asyncio.sleep(0.55)
-    for meta in legacy:
-        name = str(meta.get("FIELD_NAME") or meta.get("fieldName") or "")
-        title = str(meta.get("EDIT_FORM_LABEL") or meta.get("LIST_COLUMN_LABEL") or meta.get("editFormLabel") or "")
-        if name in {"UF_CRM_1782774357152", "UF_CRM_HORARIO_RETORNO", "UF_CRM_SDR_RESP", "UF_CRM_HANDOFF", "UF_CRM_PILOTO_AUTOMACAO"} or any(word in title.lower() for word in keywords):
-            modern[name] = {"title": title, "type": str(meta.get("USER_TYPE_ID") or meta.get("userTypeId") or "")}
-    return modern
-
-
-@app.post("/pilot/bootstrap-fields")
-async def bootstrap_fields(request: Request) -> dict[str, dict[str, str]]:
-    expected = os.getenv("PILOT_CONTROL_TOKEN", "")
-    received = request.headers.get("x-pilot-control", "")
-    if not expected or not hmac.compare_digest(expected, received):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="controle do piloto inválido")
-    return await ensure_operational_fields(BitrixClient(app.state.db))
-
-
-def _require_pilot_control(request: Request) -> str:
-    expected = os.getenv("PILOT_CONTROL_TOKEN", "")
-    received = request.headers.get("x-pilot-control", "")
-    deal_id = os.getenv("PILOT_DEAL_ID", "").strip()
-    if not expected or not hmac.compare_digest(expected, received):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="controle do piloto inválido")
-    if not deal_id:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="negócio piloto ausente")
-    return deal_id
-
-
-@app.get("/pilot/snapshot")
-async def pilot_snapshot(request: Request) -> dict[str, Any]:
-    """Diagnóstico temporário restrito ao único negócio piloto."""
-    deal_id = _require_pilot_control(request)
-    client = BitrixClient(app.state.db)
-    deal = await client.deal(int(deal_id))
-    state_row = await app.state.db.state(int(deal_id))
-    state = dict(state_row) if state_row else None
-    task = None
-    if state and state.get("open_task_id"):
-        task = await client.task(int(state["open_task_id"]))
-    return {
-        "deal": {
-            key: deal.get(key)
-            for key in (
-                "id", "title", "categoryId", "stageId", "assignedById",
-                "ufCrmResultadoTentativa", "ufCrmHorarioRetorno",
-                "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao",
-            )
-        },
-        "state": state,
-        "task": task,
-    }
-
-
-@app.post("/pilot/action")
-async def pilot_action(request: Request) -> dict[str, Any]:
-    """Ações temporárias, estritamente limitadas ao card piloto."""
-    deal_id = int(_require_pilot_control(request))
-    body = await request.json()
-    client = BitrixClient(app.state.db)
-    if body.get("complete_open_task") is True:
-        state_row = await app.state.db.state(deal_id)
-        if not state_row or not state_row["open_task_id"]:
-            return {"status": "no-open-task"}
-        await client.complete_task(int(state_row["open_task_id"]))
-        return {"status": "task-completed", "task_id": int(state_row["open_task_id"])}
-    requested = body.get("fields") or {}
-    allowed = {
-        "title", "categoryId", "stageId", "ufCrmResultadoTentativa",
-        "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff",
-        "ufCrmPilotoAutomacao",
-    }
-    if not requested or set(requested) - allowed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="campos do piloto inválidos")
-    await client.update_deal(deal_id, requested)
-    return {"status": "deal-updated"}
 
 
 @app.post("/bitrix/install")
