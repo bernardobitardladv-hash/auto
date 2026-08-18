@@ -3,7 +3,8 @@ import unittest
 
 from app.cadences import CADENCES
 from app.engine import next_step
-from app.workflow import RESULT_ROUTES, _event_entity_id, _task_fields
+from app.workflow import RESULT_ROUTES, _event_entity_id, _result, _task_fields
+from app.schema import FIELD_SPECS, RESULT_OPTIONS
 
 
 class AcceptanceTests(unittest.TestCase):
@@ -54,6 +55,16 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_correction_position_precedes_first_touch(self):
         self.assertEqual(-1 + 1, 0)
+
+    def test_result_field_supports_current_and_legacy_names(self):
+        self.assertEqual(_result({"ufCrmResultadoTentativa": "123"}), "123")
+        self.assertEqual(_result({"ufCrm_1782774357152": "45"}), "45")
+
+    def test_schema_contains_all_operational_fields(self):
+        names = {field["FIELD_NAME"] for field in FIELD_SPECS}
+        self.assertIn("UF_CRM_RESULTADO_TENTATIVA", names)
+        self.assertIn("UF_CRM_HORARIO_RETORNO", names)
+        self.assertEqual(len(RESULT_OPTIONS), 9)
 
     def test_one_task_then_exhaustion(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
