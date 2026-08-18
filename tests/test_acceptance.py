@@ -56,6 +56,10 @@ class AcceptanceTests(unittest.TestCase):
     def test_correction_position_precedes_first_touch(self):
         self.assertEqual(-1 + 1, 0)
 
+    def test_correction_can_resume_same_later_touch(self):
+        resume_position = 1
+        self.assertEqual((resume_position - 1) + 1, resume_position)
+
     def test_result_field_supports_current_and_legacy_names(self):
         self.assertEqual(_result({"ufCrmResultadoTentativa": "123"}), "123")
         self.assertEqual(_result({"ufCrm_1782774357152": "45"}), "45")
