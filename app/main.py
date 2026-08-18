@@ -8,6 +8,7 @@ habilitado para o piloto.
 from __future__ import annotations
 
 import os
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -34,6 +35,13 @@ def enabled() -> bool:
 async def startup() -> None:
     app.state.db = Database(os.getenv("DATABASE_URL"))
     app.state.workflow = Workflow(app.state.db, enabled())
+    asyncio.create_task(_connect_db())
+
+async def _connect_db() -> None:
+    try:
+        await asyncio.wait_for(app.state.db.start(), timeout=15)
+    except Exception:
+        pass
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
