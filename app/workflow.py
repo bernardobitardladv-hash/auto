@@ -9,8 +9,12 @@ from .engine import next_step
 
 STAGES = {(0, "PREPARATION"): "SDR_TENTATIVA", (0, "UC_OIFN4M"): "SDR_RETORNO", (23, "NEW"): "BDR_CONTATO", (23, "PREPARATION"): "BDR_RECUPERAR"}
 RESULT_FIELD = "ufCrm_1782774357152"
-SDR_RESULTS = {"81": "UC_OIFN4M", "51": "UC_58ABGO", "47": "LOSE", "57": "APOLOGY", "55": "UC_QK2GWQ"}
-BDR_RESULTS = {"49": "C23:EXECUTING", "51": "C23:PREPARATION", "47": "C23:LOSE"}
+RESULT_ROUTES = {
+    (0, "PREPARATION"): {"81": "UC_OIFN4M", "51": "UC_58ABGO", "47": "LOSE", "57": "APOLOGY"},
+    (0, "UC_OIFN4M"): {"51": "UC_58ABGO", "47": "LOSE", "55": "UC_QK2GWQ"},
+    (23, "NEW"): {"49": "C23:EXECUTING", "51": "C23:PREPARATION", "47": "C23:LOSE"},
+    (23, "PREPARATION"): {"49": "C23:EXECUTING"},
+}
 
 
 def _stage(deal):
@@ -59,7 +63,7 @@ class Workflow:
         async with self.db.lock_deal(deal_id):
             category, stage = _stage(deal); cadence = STAGES.get((category, stage)); state = await self.db.state(deal_id)
             result = _result(deal)
-            destination = (SDR_RESULTS.get(result) if category == 0 and stage in ("PREPARATION", "UC_OIFN4M") else BDR_RESULTS.get(result) if category == 23 and stage in ("NEW", "PREPARATION") else None)
+            destination = RESULT_ROUTES.get((category, stage), {}).get(result)
             if destination:
                 await client.update_deal(deal_id, {"stageId": destination})
                 if state and state["open_task_id"]:
@@ -90,7 +94,7 @@ class Workflow:
                 await self.db.deactivate_state(deal_id); state = None
             started = state["started_at"] if state and state["cadence"] == cadence else datetime.now(timezone.utc)
             position = int(state["position"]) if state and state["cadence"] == cadence else 0
-            step = next_step(cadence, position, started, deal.get("ufCrmHorarioRetorno"))
+            step = next_step(cadence, position, started, deal.get("ufCrmHorarioRetorno"), result=result)
             if step["kind"] == "exhausted":
                 destination = step["destination"]
                 await client.update_deal(deal_id, {"categoryId": destination["category_id"], "stageId": destination["stage_id"]})
