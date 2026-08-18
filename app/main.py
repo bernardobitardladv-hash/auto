@@ -37,7 +37,7 @@ def valid_event_token(data: dict[str, str]) -> bool:
     """Valida tokens dos webhooks de saída sem registrá-los."""
     allowed = {token.strip() for token in os.getenv("BITRIX_EVENT_TOKENS", "").split(",") if token.strip()}
     if not allowed:
-        return True
+        return False
     received = data.get("auth[application_token]") or data.get("application_token") or data.get("APPLICATION_TOKEN")
     return received in allowed
 
@@ -106,7 +106,7 @@ async def robot(request: Request) -> dict[str, str]:
 
 @app.post("/bitrix/event")
 async def event(request: Request) -> dict[str, str]:
-    """Endpoint de eventos Bitrix; a implementação de deduplicação vem no próximo commit."""
+    """Recebe eventos autenticados do Bitrix e os encaminha ao motor."""
     if not configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="app não configurado")
     data = {str(key): str(value) for key, value in (await request.form()).multi_items()}
