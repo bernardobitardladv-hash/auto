@@ -68,8 +68,12 @@ async def diagnostics() -> dict[str, bool]:
 @app.post("/bitrix/install")
 async def install(request: Request) -> dict[str, str]:
     """Recebe e armazena o retorno OAuth da instalação do Bitrix."""
-    payload = await request.form()
-    data = {str(key): str(value) for key, value in payload.multi_items()}
+    data = {str(key): str(value) for key, value in request.query_params.multi_items()}
+    try:
+        payload = await request.form()
+        data.update({str(key): str(value) for key, value in payload.multi_items()})
+    except Exception:
+        pass
     if not any(key in data for key in ("AUTH_ID", "auth[access_token]", "access_token")):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="payload OAuth ausente")
     await app.state.db.save_oauth(data)
