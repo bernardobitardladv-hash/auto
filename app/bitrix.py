@@ -10,7 +10,7 @@ class BitrixClient:
         if webhook:
             url = f"{webhook}/{method}.json"
             async with httpx.AsyncClient(timeout=20) as client:
-                response = await client.post(url, data=params)
+                response = await client.post(url, json=params)
                 response.raise_for_status(); data = response.json()
             if 'error' in data: raise RuntimeError(f"Bitrix {data['error']}")
             return data.get('result', data)
