@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import asyncio
+import hmac
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from .db import Database
 from .bitrix import BitrixClient
 from .workflow import Workflow
+from .schema import ensure_operational_fields
 
 app = FastAPI(title="Automação CRM DL", version="0.1.0")
 
@@ -105,6 +107,15 @@ async def diagnostic_crm_fields() -> dict[str, dict[str, str | None]]:
         if name in {"UF_CRM_1782774357152", "UF_CRM_HORARIO_RETORNO", "UF_CRM_SDR_RESP", "UF_CRM_HANDOFF", "UF_CRM_PILOTO_AUTOMACAO"} or any(word in title.lower() for word in keywords):
             modern[name] = {"title": title, "type": str(meta.get("USER_TYPE_ID") or meta.get("userTypeId") or "")}
     return modern
+
+
+@app.post("/pilot/bootstrap-fields")
+async def bootstrap_fields(request: Request) -> dict[str, dict[str, str]]:
+    expected = os.getenv("PILOT_CONTROL_TOKEN", "")
+    received = request.headers.get("x-pilot-control", "")
+    if not expected or not hmac.compare_digest(expected, received):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="controle do piloto inválido")
+    return await ensure_operational_fields(BitrixClient(app.state.db))
 
 
 @app.post("/bitrix/install")
