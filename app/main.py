@@ -21,6 +21,8 @@ app = FastAPI(title="Automação CRM DL", version="0.1.0")
 
 def configured() -> bool:
     """Indica se as credenciais mínimas foram configuradas no ambiente."""
+    if os.getenv("BITRIX_WEBHOOK_URL", "").strip():
+        return True
     return all(
         os.getenv(key)
         for key in ("BITRIX_CLIENT_ID", "BITRIX_CLIENT_SECRET")
@@ -62,7 +64,11 @@ def health() -> dict[str, Any]:
 @app.get("/diagnostics")
 async def diagnostics() -> dict[str, bool]:
     """Diagnóstico sem expor segredos: usado somente na validação do piloto."""
-    return {"database_ready": bool(app.state.db.pool), "oauth_ready": bool(await app.state.db.oauth())}
+    return {
+        "database_ready": bool(app.state.db.pool),
+        "oauth_ready": bool(await app.state.db.oauth()),
+        "webhook_ready": bool(os.getenv("BITRIX_WEBHOOK_URL", "").strip()),
+    }
 
 
 @app.post("/bitrix/install")
