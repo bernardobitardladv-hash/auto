@@ -14,7 +14,6 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request, status
 from .db import Database
 from .workflow import Workflow
-from .bitrix import BitrixClient
 
 app = FastAPI(title="Automação CRM DL", version="0.1.0")
 
@@ -36,14 +35,6 @@ async def startup() -> None:
     app.state.db = Database(os.getenv("DATABASE_URL"))
     await app.state.db.start()
     app.state.workflow = Workflow(app.state.db, enabled())
-    if app.state.db.pool and os.getenv("REGISTER_BITRIX_EVENTS", "true").lower() == "true":
-        try:
-            client = BitrixClient(app.state.db)
-            handler = os.getenv("PUBLIC_BASE_URL", "https://cheerful-fulfillment-production-ff2b.up.railway.app") + "/bitrix/event"
-            for event_name in ("ONCRMDEALADD", "ONCRMDEALUPDATE", "ONTASKUPDATE"):
-                await client.bind_event(event_name, handler)
-        except Exception:
-            pass
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
