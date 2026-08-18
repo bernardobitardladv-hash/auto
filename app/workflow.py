@@ -36,12 +36,24 @@ def _task_fields(deal_id, **fields):
     return {**fields, "UF_CRM_TASK": [f"D_{deal_id}"]}
 
 
+def _event_entity_id(data):
+    """Extrai IDs dos formatos distintos dos eventos de CRM e de tarefas."""
+    return (
+        data.get("data[FIELDS][ID]")
+        or data.get("data[FIELDS_AFTER][ID]")
+        or data.get("data[TASK][ID]")
+        or data.get("data[TASK_ID]")
+        or data.get("FIELDS[ID]")
+        or data.get("id")
+    )
+
+
 class Workflow:
     def __init__(self, db, enabled): self.db, self.enabled = db, enabled
 
     async def event(self, data):
         event = data.get("event") or data.get("EVENT") or ""
-        entity_id = data.get("data[FIELDS][ID]") or data.get("FIELDS[ID]") or data.get("id")
+        entity_id = _event_entity_id(data)
         if not entity_id: return "ignored"
         if not self.enabled: return "dry-run"
         if event.upper().startswith("ONCRM"): return await self.deal_changed(int(entity_id), event)
