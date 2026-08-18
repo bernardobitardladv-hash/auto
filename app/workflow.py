@@ -35,6 +35,10 @@ def _result(deal):
     return str(value) if value is not None else ""
 
 
+def _is_pilot(deal):
+    return str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") == "Y"
+
+
 def _task_fields(deal_id, **fields):
     """Vincula toda tarefa operacional ao card do negócio no Bitrix."""
     return {**fields, "UF_CRM_TASK": [f"D_{deal_id}"]}
@@ -108,8 +112,7 @@ class Workflow:
     async def deal_changed(self, deal_id, event="ONCRMDEALUPDATE", dedupe=True):
         client = BitrixClient(self.db); deal = await client.deal(deal_id)
         if dedupe and not await self.db.mark_event(f"{event}:{deal_id}:{_version(deal)}"): return "duplicate"
-        pilot_id = os.getenv("PILOT_DEAL_ID", "").strip()
-        if str(deal.get("ufCrmPilotoAutomacao") or deal.get("UF_CRM_PILOTO_AUTOMACAO") or "N") != "Y" and pilot_id != str(deal_id): return "outside-pilot"
+        if not _is_pilot(deal): return "outside-pilot"
         async with self.db.lock_deal(deal_id):
             category, stage = _stage(deal); cadence = STAGES.get((category, stage)); state = await self.db.state(deal_id)
             result = await client.result_code(_result(deal))
