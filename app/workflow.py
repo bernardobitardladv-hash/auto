@@ -31,6 +31,11 @@ def _result(deal):
     return str(value) if value is not None else ""
 
 
+def _task_fields(deal_id, **fields):
+    """Vincula toda tarefa operacional ao card do negócio no Bitrix."""
+    return {**fields, "UF_CRM_TASK": [f"D_{deal_id}"]}
+
+
 class Workflow:
     def __init__(self, db, enabled): self.db, self.enabled = db, enabled
 
@@ -74,7 +79,7 @@ class Workflow:
             if category == 0 and stage == "UC_58ABGO":
                 if not state or state["cadence"] != "SDR_HANDOFF" or not state["open_task_id"]:
                     if not deal.get("assignedById"): raise ValueError("negócio sem responsável")
-                    handoff = await client.add_task({"TITLE": f"DL | Resumo / Handoff | negócio {deal_id}", "DESCRIPTION": "Preencher Handoff: temperatura, perfil, detalhes, dores, impedimentos e objeções. Depois, marcar ganho manual.", "RESPONSIBLE_ID": deal["assignedById"], "DEADLINE": datetime.now(timezone.utc).replace(hour=20, minute=0, second=0, microsecond=0).isoformat()})
+                    handoff = await client.add_task(_task_fields(deal_id, TITLE=f"DL | Resumo / Handoff | negócio {deal_id}", DESCRIPTION="Preencher Handoff: temperatura, perfil, detalhes, dores, impedimentos e objeções. Depois, marcar ganho manual.", RESPONSIBLE_ID=deal["assignedById"], DEADLINE=datetime.now(timezone.utc).replace(hour=20, minute=0, second=0, microsecond=0).isoformat()))
                     handoff_id = int((handoff.get("task") or {}).get("id"))
                     await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence="SDR_HANDOFF", position=0, started_at=datetime.now(timezone.utc), anchor_at=None, open_task_id=handoff_id, next_due=None, active=True)
                     return "handoff-created"
@@ -105,7 +110,7 @@ class Workflow:
                 responsible = deal.get("ufCrmSdrResp") or responsible
             if not responsible: raise ValueError("negócio sem responsável")
             touch = step["task"]
-            result = await client.add_task({"TITLE": f"DL | {touch['label']} | negócio {deal_id}", "DESCRIPTION": f"Executar {touch['channel']} e registrar o resultado no negócio.", "RESPONSIBLE_ID": responsible, "DEADLINE": step["due_at"]})
+            result = await client.add_task(_task_fields(deal_id, TITLE=f"DL | {touch['label']} | negócio {deal_id}", DESCRIPTION=f"Executar {touch['channel']} e registrar o resultado no negócio.", RESPONSIBLE_ID=responsible, DEADLINE=step["due_at"]))
             raw_task_id = (result.get("task") or {}).get("id") if isinstance(result, dict) else None
             if raw_task_id is None: raise RuntimeError("Bitrix não retornou o ID da tarefa")
             await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence=cadence, position=step["position"], started_at=started, anchor_at=deal.get("ufCrmHorarioRetorno"), open_task_id=int(raw_task_id), next_due=step["due_at"], active=True)
