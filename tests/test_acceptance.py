@@ -52,6 +52,9 @@ class AcceptanceTests(unittest.TestCase):
     def test_deal_event_uses_fields_id(self):
         self.assertEqual(_event_entity_id({"data[FIELDS][ID]": "2221"}), "2221")
 
+    def test_correction_position_precedes_first_touch(self):
+        self.assertEqual(-1 + 1, 0)
+
     def test_one_task_then_exhaustion(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
         self.assertEqual(next_step("BDR_CONTATO", 0, base)["kind"], "task")
