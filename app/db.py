@@ -61,3 +61,4 @@ class Database:
         if not self.pool: return
         async with self.pool.acquire() as c:
             await c.execute("UPDATE deal_state SET active=FALSE, open_task_id=NULL, next_due=NULL, updated_at=NOW() WHERE deal_id=$1", deal_id)
+
