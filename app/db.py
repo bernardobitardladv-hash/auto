@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+from datetime import datetime
 import asyncpg
 
 SCHEMA = """
@@ -38,6 +39,9 @@ class Database:
     async def save_state(self, deal_id, **values):
         if not self.pool: return
         keys = ['category_id','stage_id','cadence','position','started_at','anchor_at','open_task_id','next_due','event_version','last_error','active']
+        for key in ('started_at', 'anchor_at', 'next_due'):
+            if isinstance(values.get(key), str):
+                values[key] = datetime.fromisoformat(values[key])
         async with self.pool.acquire() as c:
             await c.execute("INSERT INTO deal_state(deal_id,"+','.join(keys)+") VALUES($1,"+','.join(f'${i}' for i in range(2,len(keys)+2))+") ON CONFLICT(deal_id) DO UPDATE SET "+','.join(f'{k}=EXCLUDED.{k}' for k in keys)+",updated_at=NOW()", deal_id, *[values.get(k) for k in keys])
 
