@@ -1,5 +1,6 @@
-Get-Content: 
-Line |
-   2 |  Get-Content -Raw 'requirements.txt'
-     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | Cannot find path 'C:\Users\User\Desktop\Escritório (Cérebro)\requirements.txt' because it does not exist.
+fastapi==0.116.1
+asyncpg==0.30.0
+python-multipart==0.0.20
+uvicorn[standard]==0.35.0
+httpx==0.28.1
+
