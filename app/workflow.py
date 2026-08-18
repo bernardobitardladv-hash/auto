@@ -56,9 +56,36 @@ class Workflow:
         entity_id = _event_entity_id(data)
         if not entity_id: return "ignored"
         if not self.enabled: return "dry-run"
-        if event.upper().startswith("ONCRM"): return await self.deal_changed(int(entity_id), event)
-        if event.upper() == "ONTASKUPDATE": return await self.task_changed(int(entity_id), event)
+        try:
+            if event.upper().startswith("ONCRM"): return await self.deal_changed(int(entity_id), event)
+            if event.upper() == "ONTASKUPDATE": return await self.task_changed(int(entity_id), event)
+        except Exception as exc:
+            deal_id = int(entity_id)
+            if event.upper() == "ONTASKUPDATE":
+                state = await self.db.state_by_task(int(entity_id))
+                if state: deal_id = int(state["deal_id"])
+            await self.db.record_error(deal_id, str(exc))
+            return "error-recorded"
         return "accepted"
+
+    async def exception_task(self, client, deal, deal_id, cadence, message):
+        """Cria uma única tarefa de correção e mantém a cadência parada."""
+        state = await self.db.state(deal_id)
+        if state and state["open_task_id"] and state["cadence"] == cadence and int(state["position"]) == -1:
+            return "waiting-correction"
+        responsible = deal.get("assignedById") or os.getenv("OPERATIONS_USER_ID", "1")
+        task = await client.add_task(_task_fields(
+            deal_id,
+            TITLE=f"DL | CORRIGIR AUTOMAÇÃO | negócio {deal_id}",
+            DESCRIPTION=message,
+            RESPONSIBLE_ID=responsible,
+            DEADLINE=datetime.now(timezone.utc).isoformat(),
+        ))
+        task_id = (task.get("task") or {}).get("id") if isinstance(task, dict) else None
+        if task_id is None: raise RuntimeError("Bitrix não retornou o ID da tarefa de correção")
+        category, _ = _stage(deal)
+        await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence=cadence, position=-1, started_at=datetime.now(timezone.utc), anchor_at=deal.get("ufCrmHorarioRetorno"), open_task_id=int(task_id), next_due=None, last_error=message, active=True)
+        return "correction-created"
 
     async def task_changed(self, task_id, event="ONTASKUPDATE"):
         client = BitrixClient(self.db)
@@ -90,7 +117,8 @@ class Workflow:
                 return "moved-by-result"
             if category == 0 and stage == "UC_58ABGO":
                 if not state or state["cadence"] != "SDR_HANDOFF" or not state["open_task_id"]:
-                    if not deal.get("assignedById"): raise ValueError("negócio sem responsável")
+                    if not deal.get("assignedById"):
+                        return await self.exception_task(client, deal, deal_id, "SDR_HANDOFF", "Definir o responsável do negócio para liberar a tarefa Resumo / Handoff.")
                     handoff = await client.add_task(_task_fields(deal_id, TITLE=f"DL | Resumo / Handoff | negócio {deal_id}", DESCRIPTION="Preencher Handoff: temperatura, perfil, detalhes, dores, impedimentos e objeções. Depois, marcar ganho manual.", RESPONSIBLE_ID=deal["assignedById"], DEADLINE=datetime.now(timezone.utc).replace(hour=20, minute=0, second=0, microsecond=0).isoformat()))
                     handoff_id = int((handoff.get("task") or {}).get("id"))
                     await self.db.save_state(deal_id, category_id=category, stage_id=deal.get("stageId"), cadence="SDR_HANDOFF", position=0, started_at=datetime.now(timezone.utc), anchor_at=None, open_task_id=handoff_id, next_due=None, active=True)
@@ -109,6 +137,8 @@ class Workflow:
                 try: await client.complete_task(int(state["open_task_id"]))
                 except Exception: pass
                 await self.db.deactivate_state(deal_id); state = None
+            if cadence == "SDR_RETORNO" and not deal.get("ufCrmHorarioRetorno"):
+                return await self.exception_task(client, deal, deal_id, cadence, "Preencher o campo Horário de Retorno. A cadência continuará automaticamente após concluir esta correção.")
             started = state["started_at"] if state and state["cadence"] == cadence else datetime.now(timezone.utc)
             position = int(state["position"]) if state and state["cadence"] == cadence else 0
             step = next_step(cadence, position, started, deal.get("ufCrmHorarioRetorno"), result=result)
@@ -119,8 +149,12 @@ class Workflow:
                 return "moved"
             responsible = deal.get("assignedById")
             if cadence == "BDR_RECUPERAR" and position == 1:
-                responsible = deal.get("ufCrmSdrResp") or responsible
-            if not responsible: raise ValueError("negócio sem responsável")
+                sdr_original = deal.get("ufCrmSdrResp")
+                if not sdr_original:
+                    await client.add_task(_task_fields(deal_id, TITLE=f"DL | CORRIGIR SDR ORIGINAL | negócio {deal_id}", DESCRIPTION="Preencher o campo SDR original (ufCrmSdrResp). A ligação atual ficou com o BDR como contingência.", RESPONSIBLE_ID=responsible or os.getenv("OPERATIONS_USER_ID", "1"), DEADLINE=datetime.now(timezone.utc).isoformat()))
+                responsible = sdr_original or responsible
+            if not responsible:
+                return await self.exception_task(client, deal, deal_id, cadence, "Definir o responsável do negócio. A cadência continuará automaticamente após concluir esta correção.")
             touch = step["task"]
             result = await client.add_task(_task_fields(deal_id, TITLE=f"DL | {touch['label']} | negócio {deal_id}", DESCRIPTION=f"Executar {touch['channel']} e registrar o resultado no negócio.", RESPONSIBLE_ID=responsible, DEADLINE=step["due_at"]))
             raw_task_id = (result.get("task") or {}).get("id") if isinstance(result, dict) else None
