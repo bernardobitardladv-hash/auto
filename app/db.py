@@ -14,7 +14,9 @@ class Database:
         self.pool = await asyncpg.create_pool(self.url, min_size=1, max_size=4)
         async with self.pool.acquire() as c:
             for statement in SCHEMA.split(';'):
-                if statement.strip(): await c.execute(statement)
+                if statement.strip():
+                    try: await c.execute(statement)
+                    except Exception: pass
     async def close(self):
         if self.pool: await self.pool.close()
     async def save_oauth(self, data):
