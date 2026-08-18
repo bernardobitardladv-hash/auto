@@ -24,7 +24,9 @@ def next_step(cadence_name: str, position: int, started_at: datetime | str, anch
         return {"kind": "exhausted", "destination": EXHAUSTION_STAGE[cadence_name]}
 
     touch = touches[position]
-    base_at = as_datetime(anchor_at) or as_datetime(started_at)
+    base_at = (as_datetime(anchor_at) if touch.anchored else as_datetime(started_at))
+    if base_at is None and touch.anchored:
+        base_at = as_datetime(started_at)
     if base_at is None:
         raise ValueError("data inicial da cadência ausente")
     due_at = base_at + timedelta(days=touch.day, hours=touch.offset_hours)
