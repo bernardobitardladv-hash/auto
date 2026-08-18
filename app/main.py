@@ -92,8 +92,13 @@ async def diagnostic_crm_fields() -> dict[str, dict[str, str | None]]:
         for name, meta in fields.items()
         if isinstance(meta, dict) and (name in {"ufCrm_1782774357152", "ufCrmHorarioRetorno", "ufCrmSdrResp", "ufCrmHandoff", "ufCrmPilotoAutomacao"} or any(word in str(meta.get("title", "")).lower() for word in keywords))
     }
-    legacy_raw = await BitrixClient(app.state.db).call("crm.deal.userfield.list", {"order": {"ID": "ASC"}})
-    legacy = legacy_raw if isinstance(legacy_raw, list) else legacy_raw.get("items", []) if isinstance(legacy_raw, dict) else []
+    client = BitrixClient(app.state.db)
+    target_names = ("UF_CRM_1782774357152", "UF_CRM_HORARIO_RETORNO", "UF_CRM_SDR_RESP", "UF_CRM_HANDOFF", "UF_CRM_PILOTO_AUTOMACAO")
+    legacy = []
+    for target_name in target_names:
+        legacy_raw = await client.call("crm.deal.userfield.list", {"filter": {"FIELD_NAME": target_name}})
+        legacy.extend(legacy_raw if isinstance(legacy_raw, list) else legacy_raw.get("items", []) if isinstance(legacy_raw, dict) else [])
+        await asyncio.sleep(0.55)
     for meta in legacy:
         name = str(meta.get("FIELD_NAME") or meta.get("fieldName") or "")
         title = str(meta.get("EDIT_FORM_LABEL") or meta.get("LIST_COLUMN_LABEL") or meta.get("editFormLabel") or "")
