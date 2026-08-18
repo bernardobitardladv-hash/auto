@@ -3,7 +3,7 @@ import unittest
 
 from app.cadences import CADENCES
 from app.engine import next_step
-from app.workflow import RESULT_ROUTES, _event_entity_id, _result, _task_fields
+from app.workflow import RESULT_ROUTES, _event_entity_id, _is_pilot, _result, _task_fields
 from app.schema import FIELD_SPECS, RESULT_OPTIONS
 
 
@@ -84,6 +84,11 @@ class AcceptanceTests(unittest.TestCase):
     def test_dry_run_flag_is_default(self):
         import os
         self.assertNotEqual(os.getenv("AUTOMATION_ENABLED", "false").lower(), "true")
+
+    def test_only_explicit_pilot_field_allows_writes(self):
+        self.assertTrue(_is_pilot({"ufCrmPilotoAutomacao": "Y"}))
+        self.assertFalse(_is_pilot({"ufCrmPilotoAutomacao": "N"}))
+        self.assertFalse(_is_pilot({}))
 
 
 if __name__ == "__main__":
