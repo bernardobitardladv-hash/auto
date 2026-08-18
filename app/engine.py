@@ -9,7 +9,13 @@ from typing import Any
 from .cadences import CADENCES, EXHAUSTION_STAGE
 
 
-def next_step(cadence_name: str, position: int, started_at: datetime, anchor_at: datetime | None = None, result: str | None = None) -> dict[str, Any]:
+def as_datetime(value: datetime | str | None) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def next_step(cadence_name: str, position: int, started_at: datetime | str, anchor_at: datetime | str | None = None, result: str | None = None) -> dict[str, Any]:
     """Retorna o próximo toque ou o destino de esgotamento da régua."""
     touches = CADENCES[cadence_name]
     while position < len(touches) and touches[position].conditional_result and touches[position].conditional_result != str(result):
@@ -18,7 +24,10 @@ def next_step(cadence_name: str, position: int, started_at: datetime, anchor_at:
         return {"kind": "exhausted", "destination": EXHAUSTION_STAGE[cadence_name]}
 
     touch = touches[position]
-    due_at = (anchor_at or started_at) + timedelta(days=touch.day, hours=touch.offset_hours)
+    base_at = as_datetime(anchor_at) or as_datetime(started_at)
+    if base_at is None:
+        raise ValueError("data inicial da cadência ausente")
+    due_at = base_at + timedelta(days=touch.day, hours=touch.offset_hours)
     if touch.hour is not None:
         due_at = due_at.replace(hour=touch.hour, minute=touch.minute, second=0, microsecond=0)
     return {
@@ -27,4 +36,3 @@ def next_step(cadence_name: str, position: int, started_at: datetime, anchor_at:
         "due_at": due_at.isoformat(),
         "task": asdict(touch),
     }
-
