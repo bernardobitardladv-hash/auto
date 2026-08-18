@@ -33,6 +33,15 @@ def enabled() -> bool:
     return (os.getenv("AUTOMATION_ENABLED", "false").strip().lower() == "true" and os.getenv("PILOT_UNLOCK", "false").strip().lower() == "true")
 
 
+def valid_event_token(data: dict[str, str]) -> bool:
+    """Valida tokens dos webhooks de saída sem registrá-los."""
+    allowed = {token.strip() for token in os.getenv("BITRIX_EVENT_TOKENS", "").split(",") if token.strip()}
+    if not allowed:
+        return True
+    received = data.get("auth[application_token]") or data.get("application_token") or data.get("APPLICATION_TOKEN")
+    return received in allowed
+
+
 @app.on_event("startup")
 async def startup() -> None:
     app.state.db = Database(os.getenv("DATABASE_URL"))
@@ -101,5 +110,7 @@ async def event(request: Request) -> dict[str, str]:
     if not configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="app não configurado")
     data = {str(key): str(value) for key, value in (await request.form()).multi_items()}
+    if not valid_event_token(data):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token de evento inválido")
     return {"status": await app.state.workflow.event(data)}
 
