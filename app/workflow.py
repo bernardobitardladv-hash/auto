@@ -136,6 +136,8 @@ class Workflow:
                     await self.db.deactivate_state(deal_id)
                     return "cadence-cleared"
                 return "no-cadence"
+            if state and not state["active"]:
+                state = None
             if state and state["open_task_id"] and state["cadence"] == cadence: return "waiting-task"
             if state and state["open_task_id"] and state["cadence"] != cadence:
                 try: await client.complete_task(int(state["open_task_id"]))
