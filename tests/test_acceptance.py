@@ -3,6 +3,7 @@ import unittest
 
 from app.cadences import CADENCES
 from app.engine import next_step
+from app.workflow import RESULT_ROUTES
 
 
 class AcceptanceTests(unittest.TestCase):
@@ -20,6 +21,26 @@ class AcceptanceTests(unittest.TestCase):
     def test_sdr_return_accepts_bitrix_datetime(self):
         step = next_step("SDR_RETORNO", 1, "2026-08-17T09:00:00+00:00", "2026-08-20T14:30:00+00:00")
         self.assertEqual(step["due_at"], "2026-08-20T14:30:00+00:00")
+
+    def test_sdr_return_confirmation_is_immediate(self):
+        step = next_step("SDR_RETORNO", 0, "2026-08-17T09:00:00+00:00", "2026-08-20T14:30:00+00:00")
+        self.assertEqual(step["due_at"], "2026-08-17T09:00:00+00:00")
+
+    def test_sdr_return_reinforcement_requires_no_answer(self):
+        base = "2026-08-17T09:00:00+00:00"
+        anchor = "2026-08-20T14:30:00+00:00"
+        self.assertEqual(next_step("SDR_RETORNO", 2, base, anchor, result="45")["position"], 2)
+        self.assertEqual(next_step("SDR_RETORNO", 2, base, anchor, result="51")["position"], 3)
+
+    def test_routes_are_stage_specific(self):
+        self.assertEqual(RESULT_ROUTES[(0, "PREPARATION")]["81"], "UC_OIFN4M")
+        self.assertNotIn("81", RESULT_ROUTES[(0, "UC_OIFN4M")])
+        self.assertEqual(RESULT_ROUTES[(23, "NEW")]["51"], "C23:PREPARATION")
+        self.assertNotIn("51", RESULT_ROUTES[(23, "PREPARATION")])
+
+    def test_default_funnel_stage_has_no_c0_prefix(self):
+        exhausted = next_step("SDR_TENTATIVA", 9, "2026-08-17T09:00:00+00:00")
+        self.assertEqual(exhausted["destination"]["stage_id"], "UC_XXPI8O")
 
     def test_one_task_then_exhaustion(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
