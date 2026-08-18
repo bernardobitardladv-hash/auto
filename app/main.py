@@ -28,7 +28,7 @@ def configured() -> bool:
 
 
 def enabled() -> bool:
-    return os.getenv("AUTOMATION_ENABLED", "false").strip().lower() == "true"
+    return (os.getenv("AUTOMATION_ENABLED", "false").strip().lower() == "true" and os.getenv("PILOT_UNLOCK", "false").strip().lower() == "true")
 
 
 @app.on_event("startup")
