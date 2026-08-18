@@ -16,12 +16,12 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_bdr_exact_slots(self):
         base = datetime(2026, 8, 17, 9, tzinfo=timezone.utc)
-        self.assertEqual(next_step("BDR_CONTATO", 0, base)["due_at"], "2026-08-17T13:00:00+00:00")
-        self.assertEqual(next_step("BDR_CONTATO", 5, base)["due_at"], "2026-08-18T17:00:00+00:00")
+        self.assertEqual(next_step("BDR_CONTATO", 0, base)["due_at"], "2026-08-17T13:00:00-03:00")
+        self.assertEqual(next_step("BDR_CONTATO", 5, base)["due_at"], "2026-08-18T17:00:00-03:00")
 
     def test_sdr_return_accepts_bitrix_datetime(self):
-        step = next_step("SDR_RETORNO", 1, "2026-08-17T09:00:00+00:00", "2026-08-20T14:30:00+00:00")
-        self.assertEqual(step["due_at"], "2026-08-20T14:30:00+00:00")
+        step = next_step("SDR_RETORNO", 1, "2026-08-17T09:00:00+00:00", "2026-08-20T14:30:00+03:00")
+        self.assertEqual(step["due_at"], "2026-08-20T14:30:00-03:00")
 
     def test_sdr_return_confirmation_is_immediate(self):
         step = next_step("SDR_RETORNO", 0, "2026-08-17T09:00:00+00:00", "2026-08-20T14:30:00+00:00")
