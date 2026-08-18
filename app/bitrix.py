@@ -5,6 +5,15 @@ import httpx
 class BitrixClient:
     def __init__(self, db): self.db = db
     async def call(self, method, params):
+        """Chama a API sem expor credenciais em logs ou respostas."""
+        webhook = os.getenv('BITRIX_WEBHOOK_URL', '').strip().rstrip('/')
+        if webhook:
+            url = f"{webhook}/{method}.json"
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(url, data=params)
+                response.raise_for_status(); data = response.json()
+            if 'error' in data: raise RuntimeError(f"Bitrix {data['error']}")
+            return data.get('result', data)
         row = await self.db.oauth()
         if not row or not row['access_token']: raise RuntimeError('OAuth Bitrix não instalado')
         endpoint = row['client_endpoint'] or f"https://{row['domain']}/rest/"
