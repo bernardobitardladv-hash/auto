@@ -23,7 +23,9 @@ class BitrixClient:
             response.raise_for_status(); data = response.json()
         if 'error' in data: raise RuntimeError(f"Bitrix {data['error']}")
         return data.get('result', data)
-    async def deal(self, deal_id): return await self.call('crm.item.get', {'entityTypeId': 2, 'id': deal_id})
+    async def deal(self, deal_id):
+        result = await self.call('crm.item.get', {'entityTypeId': 2, 'id': deal_id})
+        return result.get('item', result) if isinstance(result, dict) else result
     async def update_deal(self, deal_id, fields): return await self.call('crm.item.update', {'entityTypeId': 2, 'id': deal_id, 'fields': fields})
     async def add_task(self, fields): return await self.call('tasks.task.add', {'fields': fields})
     async def task(self, task_id): return await self.call('tasks.task.get', {'taskId': task_id})
